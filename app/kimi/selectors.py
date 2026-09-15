@@ -1,22 +1,15 @@
-INPUT_SELECTOR = '.ql-editor[contenteditable="true"]'
-
-SEND_SELECTOR = '#yuanbao-send-btn'
-
-MODEL_SWITCH_SELECTOR = (
-    'button[data-thinking-mode-switcher-trigger="true"]'
+INPUT_SELECTOR = (
+    '.chat-input-editor'
+    '[contenteditable="true"]'
+    '[data-lexical-editor="true"]'
+    '[role="textbox"]'
 )
 
-QUESTION_SELECTOR = (
-    '.agent-chat__bubble--human .hyc-content-text'
-)
+SEND_SELECTOR = ".send-button-container"
 
-ANSWER_SELECTOR = (
-    '.agent-chat__conv--ai__speech_show .hyc-content-md'
-)
+MODEL_SWITCH_SELECTOR = ".current-model"
 
-ANSWER_DONE_SELECTOR = (
-    '.agent-chat__conv--ai__speech_show .hyc-content-md-done'
-)
+
 
 NEW_CHAT_SELECTOR = ".yb-new-chat-entry__item"
 
@@ -68,4 +61,25 @@ REFERENCE_DESC_SELECTOR = (
 
 REFERENCE_CLOSE_SELECTOR = (
     ".agent-dialogue-references__close"
+)
+
+QUESTION_ITEM_SELECTOR = (
+    ".chat-content-item-user"
+)
+
+QUESTION_TEXT_SELECTOR = (
+    ".chat-content-item-user "
+    ".user-content__text"
+)
+
+ASSISTANT_ITEM_SELECTOR = (
+    ".chat-content-item-assistant"
+)
+
+THINKING_CONTAINER_SELECTOR = (
+    ".thinking-container"
+)
+
+ASSISTANT_ACTIONS_SELECTOR = (
+    ".segment-assistant-actions"
 )

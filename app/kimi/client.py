@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from app.kimi.answer import (
+    wait_for_answer,
+)
+
 import random
 import time
 
@@ -11,13 +15,12 @@ from playwright.sync_api import (
 from .config import KimiConfig
 
 from app.kimi.selectors import (
-    ANSWER_SELECTOR,
+    ASSISTANT_ITEM_SELECTOR,
     INPUT_SELECTOR,
     MODEL_MENU_SELECTOR,
     MODEL_SWITCH_SELECTOR,
     MODE_OPTION_SELECTOR,
     NEW_CHAT_SELECTOR,
-    QUESTION_SELECTOR,
     REFERENCE_CLOSE_SELECTOR,
     REFERENCE_DRAWER_SELECTOR,
     REFERENCE_ITEM_SELECTOR,
@@ -45,13 +48,17 @@ from app.kimi.risk_control import (
 )
 
 from app.kimi.selectors import (
-    REFERENCE_CARD_SELECTOR,
+    ASSISTANT_ITEM_SELECTOR,
+    INPUT_SELECTOR,
+    MODEL_MENU_SELECTOR,
+    MODEL_SWITCH_SELECTOR,
+    MODE_OPTION_SELECTOR,
+    NEW_CHAT_SELECTOR,
+    QUESTION_ITEM_SELECTOR,
     REFERENCE_CLOSE_SELECTOR,
-    REFERENCE_DESC_SELECTOR,
     REFERENCE_DRAWER_SELECTOR,
     REFERENCE_ITEM_SELECTOR,
-    REFERENCE_SOURCE_SELECTOR,
-    REFERENCE_TITLE_SELECTOR,
+    SEND_SELECTOR,
     SOURCE_TOOL_SELECTOR,
 )
 
@@ -412,151 +419,23 @@ class KimiClient:
 
     def _answer_count(self) -> int:
         return self.page.locator(
-            ANSWER_SELECTOR
+            ASSISTANT_ITEM_SELECTOR
         ).count()
 
     def _wait_for_new_answer_complete(
             self,
             before_answer_count: int,
     ) -> str:
-        deadline = (
-                time.monotonic()
-                + self.answer_timeout_seconds
-        )
-
-        clarification_handled = False
-
-        while time.monotonic() < deadline:
-
-            # 检测元宝动态澄清卡
-            if not clarification_handled:
-                skip_all = self.page.get_by_text(
-                    "跳过所有",
-                    exact=False,
-                )
-
-                for index in range(
-                        skip_all.count()
-                ):
-                    item = skip_all.nth(index)
-
-                    if not item.is_visible():
-                        continue
-
-                    print(
-                        "[CLARIFICATION] 检测到澄清卡"
-                    )
-
-                    print(
-                        "[CLARIFICATION] "
-                        + item.inner_text().strip()
-                    )
-
-                    # 保留一次真实 DOM，方便后续排查
-                    try:
-                        html = item.evaluate(
-                            "(el) => el.outerHTML"
-                        )
-
-                        parent_html = item.evaluate(
-                            "(el) => "
-                            "el.parentElement "
-                            "? el.parentElement.outerHTML "
-                            ": ''"
-                        )
-
-                        print(
-                            f"[CLARIFICATION DOM] {html}"
-                        )
-
-                        print(
-                            "[CLARIFICATION PARENT DOM] "
-                            f"{parent_html}"
-                        )
-
-                    except Exception:
-                        pass
-
-                    # 自动跳过全部澄清问题
-                    item.click(
-                        force=True,
-                        timeout=2000,
-                    )
-
-                    print(
-                        "[CLARIFICATION] 已自动跳过"
-                    )
-
-                    clarification_handled = True
-
-                    self.page.wait_for_timeout(
-                        500
-                    )
-
-                    break
-
-                if clarification_handled:
-                    continue
-
-            answers = self.page.locator(
-                ANSWER_SELECTOR
-            )
-
-            current_count = answers.count()
-
-            if current_count > before_answer_count:
-                latest_answer = answers.last
-
-                class_name = (
-                        latest_answer.get_attribute(
-                            "class"
-                        )
-                        or ""
-                )
-
-                # 澄清流程出现时，发送按钮可能暂时消失。
-                send_button = self.page.locator(
-                    SEND_SELECTOR
-                ).first
-
-                send_aria = None
-
-                if send_button.count() > 0:
-                    try:
-                        send_aria = (
-                            send_button.get_attribute(
-                                "aria-label",
-                                timeout=500,
-                            )
-                        )
-                    except PlaywrightTimeoutError:
-                        send_aria = None
-
-                answer_done = (
-                        "hyc-content-md-done"
-                        in class_name
-                )
-
-                send_restored = (
-                        send_aria == "发送"
-                )
-
-                if answer_done and send_restored:
-                    text = (
-                        latest_answer
-                        .inner_text()
-                        .strip()
-                    )
-
-                    if text:
-                        return text
-
-            self.page.wait_for_timeout(
-                500
-            )
-
-        raise TimeoutError(
-            "等待KIMI回答完成超时"
+        return wait_for_answer(
+            self.page,
+            before_answer_count,
+            timeout=self.answer_timeout_seconds,
+            poll_interval=(
+                self.config.answer_poll_interval
+            ),
+            stable_seconds=(
+                self.config.answer_stable_seconds
+            ),
         )
 
     def new_chat(self) -> None:
@@ -576,11 +455,11 @@ class KimiClient:
 
         while time.monotonic() < deadline:
             question_count = self.page.locator(
-                QUESTION_SELECTOR
+                QUESTION_ITEM_SELECTOR
             ).count()
 
             answer_count = self.page.locator(
-                ANSWER_SELECTOR
+                ASSISTANT_ITEM_SELECTOR
             ).count()
 
             editor = self.page.locator(

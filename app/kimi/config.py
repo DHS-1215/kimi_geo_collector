@@ -31,3 +31,7 @@ class KimiConfig:
     risk_control_delay_min: float = 60.0
 
     risk_control_delay_max: float = 120.0
+
+    answer_poll_interval: float = 0.5
+
+    answer_stable_seconds: float = 2.0
