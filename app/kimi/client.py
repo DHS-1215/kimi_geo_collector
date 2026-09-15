@@ -728,20 +728,11 @@ class KimiClient:
     def get_sources(
             self,
     ) -> list[KimiSource]:
-        opened = self._open_sources()
+        extractor = KimiSourceExtractor(
+            page=self.page,
+        )
 
-        if not opened:
-            return []
-
-        try:
-            extractor = KimiSourceExtractor(
-                page=self.page,
-            )
-
-            return extractor.extract()
-
-        finally:
-            self._close_sources()
+        return extractor.extract()
 
     def _random_action_delay(
             self,

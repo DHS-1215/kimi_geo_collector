@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
+from urllib.parse import (
+    urldefrag,
+    urlparse,
+)
 
 from playwright.sync_api import Page
 
 from app.kimi.selectors import (
-    REFERENCE_CARD_SELECTOR,
-    REFERENCE_DESC_SELECTOR,
-    REFERENCE_ITEM_SELECTOR,
-    REFERENCE_SOURCE_SELECTOR,
-    REFERENCE_TITLE_SELECTOR,
+    ASSISTANT_ITEM_SELECTOR,
+    CITATION_SELECTOR,
 )
 
 from app.kimi.source import KimiSource
@@ -27,79 +27,147 @@ class KimiSourceExtractor:
             self,
     ) -> list[KimiSource]:
 
-        items = self.page.locator(
-            REFERENCE_ITEM_SELECTOR
+        assistants = self.page.locator(
+            ASSISTANT_ITEM_SELECTOR
         )
 
-        sources: list[KimiSource] = []
+        if assistants.count() == 0:
+            return []
 
-        for index in range(
-                items.count()
+        latest = assistants.last
+
+        citations = latest.locator(
+            CITATION_SELECTOR
+        )
+
+        records: list[dict] = []
+
+        url_positions: dict[str, int] = {}
+
+        for citation_index in range(
+                citations.count()
         ):
-            item = items.nth(index)
+            citation = citations.nth(
+                citation_index
+            )
 
-            card = item.locator(
-                REFERENCE_CARD_SELECTOR
-            ).first
-
-            if card.count() == 0:
-                continue
-
-            url = (
-                    card.get_attribute(
-                        "data-url"
-                    )
-                    or item.get_attribute(
-                        "dt-ext6"
+            raw_url = (
+                    citation.get_attribute(
+                        "href"
                     )
                     or ""
             ).strip()
 
-            source_node = item.locator(
-                REFERENCE_SOURCE_SELECTOR
-            ).first
+            if not raw_url:
+                continue
 
-            title_node = item.locator(
-                REFERENCE_TITLE_SELECTOR
-            ).first
-
-            desc_node = item.locator(
-                REFERENCE_DESC_SELECTOR
-            ).first
-
-            source = (
-                source_node.inner_text().strip()
-                if source_node.count()
-                else ""
+            # 去掉 #:~:text= 等 fragment
+            clean_url, _ = urldefrag(
+                raw_url
             )
 
-            title = (
-                title_node.inner_text().strip()
-                if title_node.count()
-                else ""
+            clean_url = clean_url.strip()
+
+            if not clean_url:
+                continue
+
+            site_name = (
+                    citation.get_attribute(
+                        "data-site-name"
+                    )
+                    or ""
+            ).strip()
+
+            domain = urlparse(
+                clean_url
+            ).netloc
+
+            if not site_name:
+                site_name = domain
+
+            context = citation.evaluate(
+                """
+                el => {
+                    const paragraph =
+                        el.closest('.paragraph');
+
+                    if (!paragraph) {
+                        return '';
+                    }
+
+                    return (
+                        paragraph.innerText ||
+                        paragraph.textContent ||
+                        ''
+                    ).trim();
+                }
+                """
             )
 
-            description = (
-                desc_node.inner_text().strip()
-                if desc_node.count()
-                else ""
+            context = (
+                    context or ""
+            ).strip()
+
+            # 同一个网页已经出现过
+            if clean_url in url_positions:
+
+                position = url_positions[
+                    clean_url
+                ]
+
+                contexts = records[
+                    position
+                ]["contexts"]
+
+                if (
+                        context
+                        and context not in contexts
+                ):
+                    contexts.append(
+                        context
+                    )
+
+                continue
+
+            url_positions[
+                clean_url
+            ] = len(records)
+
+            records.append(
+                {
+                    "source": site_name,
+                    "url": clean_url,
+                    "domain": domain,
+                    "contexts": (
+                        [context]
+                        if context
+                        else []
+                    ),
+                }
             )
 
-            domain = ""
+        sources: list[KimiSource] = []
 
-            if url:
-                domain = urlparse(
-                    url
-                ).netloc
+        for index, record in enumerate(
+                records,
+                start=1,
+        ):
+            description = "\n\n".join(
+                record["contexts"]
+            )
 
             sources.append(
                 KimiSource(
-                    index=index + 1,
-                    source=source,
-                    title=title,
+                    index=index,
+                    source=record["source"],
+
+                    # 当前 KIMI 引用节点
+                    # 不直接提供网页标题
+                    title="",
+
                     description=description,
-                    url=url,
-                    domain=domain,
+                    url=record["url"],
+                    domain=record["domain"],
                 )
             )
 

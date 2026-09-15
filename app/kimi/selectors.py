@@ -9,8 +9,6 @@ SEND_SELECTOR = ".send-button-container"
 
 MODEL_SWITCH_SELECTOR = ".current-model"
 
-
-
 NEW_CHAT_SELECTOR = ".yb-new-chat-entry__item"
 
 MODE_OPTION_SELECTOR = (
@@ -82,4 +80,8 @@ THINKING_CONTAINER_SELECTOR = (
 
 ASSISTANT_ACTIONS_SELECTOR = (
     ".segment-assistant-actions"
+)
+
+CITATION_SELECTOR = (
+    "a.pua-ref-cite-tag[href]"
 )
