@@ -9,16 +9,11 @@ SEND_SELECTOR = ".send-button-container"
 
 MODEL_SWITCH_SELECTOR = ".current-model"
 
-NEW_CHAT_SELECTOR = ".yb-new-chat-entry__item"
-
-MODE_OPTION_SELECTOR = (
-    'button[role="menuitemradio"]'
+NEW_CHAT_SELECTOR = (
+    'a[aria-label="新建会话"]'
+    '[href*="chat_enter_method=new_chat"]'
 )
 
-MODEL_MENU_SELECTOR = (
-    'button[role="menuitem"]'
-    '[aria-label="选择模型"]'
-)
 
 MODE_OPTION_SELECTOR = (
     'button[role="menuitemradio"]'
@@ -84,4 +79,34 @@ ASSISTANT_ACTIONS_SELECTOR = (
 
 CITATION_SELECTOR = (
     "a.pua-ref-cite-tag[href]"
+)
+
+
+MODEL_OPTION_SELECTOR = (
+    'button.model-item'
+    '[role="menuitemradio"]'
+)
+
+MODEL_NAME_SELECTOR = (
+    ".model-name .name"
+)
+
+EFFORT_ENTRY_SELECTOR = (
+    "button.effort-item"
+)
+
+EFFORT_OPTION_SELECTOR = (
+    'button.effort-option'
+    '[role="menuitemradio"]'
+)
+
+EFFORT_VALUE_SELECTOR = (
+    ".effort-value"
+)
+
+CURRENT_EFFORT_SELECTOR = (
+    ".current-effort"
+)
+EFFORT_NAME_SELECTOR = (
+    ".effort-name"
 )

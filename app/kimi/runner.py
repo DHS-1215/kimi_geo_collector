@@ -41,13 +41,18 @@ class KimiTask:
 
 def build_geo_tasks(
         questions: list[KimiQuestion],
-        model: KimiModel = KimiModel.HY3,
+        model: KimiModel = KimiModel.FAST,
         modes: tuple[KimiMode, ...] = (
-                KimiMode.QUICK,
-                KimiMode.EXPERT,
+                KimiMode.STANDARD,
+                KimiMode.ADVANCED,
         ),
 ) -> list[KimiTask]:
     tasks: list[KimiTask] = []
+
+    if model != KimiModel.FAST:
+        raise ValueError(
+            "KIMI GEO正式采集仅支持快速模型"
+        )
 
     supported_modes = (
         MODEL_MODE_COMPATIBILITY[model]
@@ -260,6 +265,26 @@ class KimiBatchRunner:
                     or "采集结果不完整"
             )
 
+            is_capacity_limited = (
+                    result.acquisition_status
+                    == "service_capacity_limited"
+            )
+
+            if is_capacity_limited:
+                print(
+                    "[CAPACITY] "
+                    "检测到KIMI服务容量限制："
+                    f"{error_message}"
+                )
+
+                print(
+                    "[CAPACITY] "
+                    "当前任务停止重试，"
+                    "避免继续请求页面"
+                )
+
+                return result
+
             is_risk_control = (
                     result.acquisition_status
                     == "risk_control"
@@ -428,14 +453,23 @@ class KimiBatchRunner:
                 )
             )
 
+
         else:
+
             self.started_at = (
+
                 utc_now_iso()
+
             )
 
+        capacity_interrupted = False
+
         try:
+
             for index, task in enumerate(
+
                     tasks
+
             ):
                 print(
                     "=" * 80
@@ -522,6 +556,19 @@ class KimiBatchRunner:
                         f"ERROR: {result.error}"
                     )
 
+                if (
+                        result.acquisition_status
+                        == "service_capacity_limited"
+                ):
+                    print(
+                        "[CAPACITY] "
+                        "检测到KIMI服务容量限制，"
+                        "暂停整个批次"
+                    )
+
+                    capacity_interrupted = True
+                    break
+
                 if index < len(tasks) - 1:
                     time.sleep(
                         random.uniform(
@@ -535,12 +582,20 @@ class KimiBatchRunner:
             )
 
             if self.checkpoint_store:
-                self.checkpoint_store.mark_completed(
-                    results=results,
-                    finished_at=(
-                        self.finished_at
-                    ),
-                )
+                if capacity_interrupted:
+                    self.checkpoint_store.mark_interrupted(
+                        finished_at=(
+                            self.finished_at
+                        )
+                    )
+
+                else:
+                    self.checkpoint_store.mark_completed(
+                        results=results,
+                        finished_at=(
+                            self.finished_at
+                        ),
+                    )
 
             return results
 

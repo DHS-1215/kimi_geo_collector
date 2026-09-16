@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 from playwright.sync_api import Page
 
+from collections.abc import Callable
+
 from .selectors import ASSISTANT_ITEM_SELECTOR
 
 
@@ -12,6 +14,7 @@ class KimiAssistantState:
     thinking_state: str
     answer: str
     has_actions: bool
+    is_capacity_waiting: bool
 
 
 def read_latest_assistant_state(
@@ -29,6 +32,7 @@ def read_latest_assistant_state(
             thinking_state="",
             answer="",
             has_actions=False,
+            is_capacity_waiting=False,
         )
 
     latest = assistants.last
@@ -51,6 +55,10 @@ def read_latest_assistant_state(
             ) {
                 thinkingState = 'done';
             }
+            const isCapacityWaiting = (
+            allText.includes('高峰期算力不足') ||
+            allText.includes('请耐心等待')
+            );
 
             const markdownContainers = [
                 ...root.querySelectorAll(
@@ -109,7 +117,9 @@ def read_latest_assistant_state(
                         root.querySelector(
                             '.segment-assistant-actions'
                         )
-                    )
+                    ),
+                is_capacity_waiting:
+                isCapacityWaiting
             };
         }
         """
@@ -122,16 +132,22 @@ def read_latest_assistant_state(
         ),
         answer=data["answer"],
         has_actions=data["has_actions"],
+        is_capacity_waiting=(
+            data["is_capacity_waiting"]
+        ),
     )
 
 
 def wait_for_answer(
         page: Page,
         previous_assistant_count: int,
-        *,
         timeout: float = 120,
         poll_interval: float = 0.5,
         stable_seconds: float = 2.0,
+        abort_check: (
+                Callable[[], str | None]
+                | None
+        ) = None,
 ) -> str:
     deadline = (
             time.monotonic() + timeout
@@ -142,6 +158,13 @@ def wait_for_answer(
     stable_since: float | None = None
 
     while time.monotonic() < deadline:
+        if abort_check is not None:
+            abort_reason = abort_check()
+
+            if abort_reason:
+                raise RuntimeError(
+                    abort_reason
+                )
         state = (
             read_latest_assistant_state(
                 page
@@ -186,6 +209,7 @@ def wait_for_answer(
                         state.thinking_state
                         != "thinking"
                 )
+                and not state.is_capacity_waiting
                 and state.has_actions
                 and (
                         stable_for

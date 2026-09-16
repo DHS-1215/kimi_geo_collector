@@ -6,14 +6,13 @@ from pathlib import Path
 from app.kimi.checksum import generate_checksums
 from app.kimi.geo_contract import (
     COLLECTOR_VERSION,
-    DEFAULT_PRODUCT_ID,
-    DEFAULT_PRODUCT_NAME,
     GEO_BATCH_VERSION,
     GEO_SCHEMA_VERSION,
     KIMI_PLATFORM_CODE,
     KIMI_PLATFORM_NAME,
     build_answer_id,
     build_occurrence_id,
+    resolve_product,
 )
 from app.kimi.result import KimiCollectionResult
 
@@ -399,6 +398,32 @@ class KimiExporter:
             if source.url.strip()
         )
 
+        product_names = {
+            result.product.strip()
+            for result in results
+            if result.product.strip()
+        }
+
+        if not product_names:
+            raise ValueError(
+                "导出 GEO 标准包时 "
+                "product 不能为空"
+            )
+
+        if len(product_names) != 1:
+            raise ValueError(
+                "同一 GEO 标准包不能包含多个产品："
+                + ", ".join(
+                    sorted(product_names)
+                )
+            )
+
+        product_id, product_name = (
+            resolve_product(
+                next(iter(product_names))
+            )
+        )
+
         manifest = {
             "schema_version": (
                 GEO_SCHEMA_VERSION
@@ -415,10 +440,10 @@ class KimiExporter:
             ),
 
             "product_id": (
-                DEFAULT_PRODUCT_ID
+                product_id
             ),
             "product_name": (
-                DEFAULT_PRODUCT_NAME
+                product_name
             ),
 
             "batch_id": batch_id,

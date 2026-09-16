@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+
+# 可以通过冷却后再次尝试的普通风控
 RISK_CONTROL_MARKERS = (
     "访问过于频繁",
     "操作过于频繁",
@@ -14,22 +16,36 @@ RISK_CONTROL_MARKERS = (
 )
 
 
-def find_risk_control_marker(
+def _normalize(
         text: str | None,
-) -> str | None:
+) -> str:
     if not text:
-        return None
+        return ""
 
-    normalized = "".join(
+    return "".join(
         str(text).split()
     )
 
+
+def find_risk_control_marker(
+        text: str | None,
+) -> str | None:
+    normalized = _normalize(
+        text
+    )
+
+    if not normalized:
+        return None
+
     for marker in RISK_CONTROL_MARKERS:
-        normalized_marker = "".join(
-            marker.split()
+        normalized_marker = _normalize(
+            marker
         )
 
-        if normalized_marker in normalized:
+        if (
+            normalized_marker
+            in normalized
+        ):
             return marker
 
     return None

@@ -8,3 +8,6 @@ output/
 
 # 浏览器独立登录态
 .chrome-profile/
+
+# KIMI 开发阶段探针输出
+kimi_w*.txt

@@ -3,6 +3,13 @@ from __future__ import annotations
 from app.kimi.answer import (
     wait_for_answer,
 )
+from app.kimi.capacity import (
+    is_service_capacity_limited,
+)
+
+from app.kimi.risk_control import (
+    find_risk_control_marker,
+)
 
 import random
 import time
@@ -15,17 +22,21 @@ from playwright.sync_api import (
 from .config import KimiConfig
 
 from app.kimi.selectors import (
-    ASSISTANT_ITEM_SELECTOR,
     INPUT_SELECTOR,
-    MODEL_MENU_SELECTOR,
-    MODEL_SWITCH_SELECTOR,
-    MODE_OPTION_SELECTOR,
-    NEW_CHAT_SELECTOR,
-    REFERENCE_CLOSE_SELECTOR,
-    REFERENCE_DRAWER_SELECTOR,
-    REFERENCE_ITEM_SELECTOR,
     SEND_SELECTOR,
-    SOURCE_TOOL_SELECTOR,
+
+    MODEL_SWITCH_SELECTOR,
+    MODEL_OPTION_SELECTOR,
+    MODEL_NAME_SELECTOR,
+    CURRENT_EFFORT_SELECTOR,
+
+    EFFORT_ENTRY_SELECTOR,
+    EFFORT_OPTION_SELECTOR,
+    EFFORT_NAME_SELECTOR,
+    EFFORT_VALUE_SELECTOR,
+
+    QUESTION_ITEM_SELECTOR,
+    ASSISTANT_ITEM_SELECTOR,
 )
 
 from app.kimi.types import (
@@ -67,12 +78,17 @@ class KimiClient:
     def __init__(
             self,
             page: Page,
-            answer_timeout_seconds: float = 60.0,
+            answer_timeout_seconds: float | None = None,
             config: KimiConfig | None = None,
     ) -> None:
         self.page = page
-        self.answer_timeout_seconds = answer_timeout_seconds
         self.config = config or KimiConfig()
+
+        self.answer_timeout_seconds = (
+            float(answer_timeout_seconds)
+            if answer_timeout_seconds is not None
+            else float(self.config.answer_timeout)
+        )
 
     def ask(self, question: str) -> str:
         question = question.strip()
@@ -118,6 +134,35 @@ class KimiClient:
         return find_risk_control_marker(
             body_text
         )
+
+    def detect_service_capacity_limit(
+            self,
+            error_message: str = "",
+    ) -> str | None:
+
+        if is_service_capacity_limited(
+                error_message
+        ):
+            return "service_capacity_limited"
+
+        try:
+            body_text = (
+                self.page
+                .locator("body")
+                .inner_text(
+                    timeout=1000
+                )
+            )
+
+        except Exception:
+            return None
+
+        if is_service_capacity_limited(
+                body_text
+        ):
+            return "service_capacity_limited"
+
+        return None
 
     def recover_after_risk_control(
             self,
@@ -249,101 +294,89 @@ class KimiClient:
                 question
             )
 
-
         except Exception as e:
 
             error_message = str(e)
 
-            risk_marker = (
-
-                self.detect_risk_control(
-
+            capacity_status = (
+                self.detect_service_capacity_limit(
                     error_message
+                )
+            )
 
+            if capacity_status:
+                acquisition_status = (
+                    "service_capacity_limited"
                 )
 
-            )
-
-            acquisition_status = (
-
-                "risk_control"
-
-                if risk_marker
-
-                else "failed"
-
-            )
-
-            if risk_marker:
-
-                risk_message = (
-
-                    f"检测到KIMI风控："
-
-                    f"{risk_marker}"
-
+                capacity_message = (
+                    "检测到KIMI服务容量限制："
+                    "service_capacity_limited"
                 )
 
                 if error_message:
-
                     error_message = (
-
                         f"{error_message} | "
-
-                        f"{risk_message}"
-
+                        f"{capacity_message}"
+                    )
+                else:
+                    error_message = (
+                        capacity_message
                     )
 
+            else:
+                risk_marker = (
+                    self.detect_risk_control(
+                        error_message
+                    )
+                )
+
+                if risk_marker:
+                    acquisition_status = (
+                        "risk_control"
+                    )
+
+                    risk_message = (
+                        "检测到KIMI风控："
+                        f"{risk_marker}"
+                    )
+
+                    if error_message:
+                        error_message = (
+                            f"{error_message} | "
+                            f"{risk_message}"
+                        )
+                    else:
+                        error_message = (
+                            risk_message
+                        )
+
                 else:
-
-                    error_message = (
-
-                        risk_message
-
+                    acquisition_status = (
+                        "failed"
                     )
 
             return KimiCollectionResult(
-
                 question=question,
-
                 answer="",
-
                 model=model.value,
-
                 mode=mode.value,
-
                 conversation_url=self.page.url,
-
                 sources=[],
-
                 status="failed",
-
                 error=error_message,
-
                 acquisition_status=(
-
                     acquisition_status
-
                 ),
-
                 validation_status=(
-
                     "NOT_APPLICABLE"
-
                 ),
-
                 is_complete=False,
-
                 source_collection_status=(
-
                     "failed"
-
                 ),
-
                 source_count_raw=0,
-
                 collected_at=utc_now_iso(),
-
             )
 
         source_collection_status = "success"
@@ -403,6 +436,7 @@ class KimiClient:
         editor.fill(
             question
         )
+        self._random_action_delay()
 
     def _send(self) -> None:
         send_button = self.page.locator(
@@ -430,18 +464,13 @@ class KimiClient:
             self.page,
             before_answer_count,
             timeout=self.answer_timeout_seconds,
-            poll_interval=(
-                self.config.answer_poll_interval
-            ),
-            stable_seconds=(
-                self.config.answer_stable_seconds
-            ),
+            poll_interval=self.config.answer_poll_interval,
+            stable_seconds=self.config.answer_stable_seconds,
         )
 
     def new_chat(self) -> None:
         new_chat_button = self.page.locator(
-            NEW_CHAT_SELECTOR,
-            has_text="新对话",
+            NEW_CHAT_SELECTOR
         ).first
 
         new_chat_button.wait_for(
@@ -484,7 +513,59 @@ class KimiClient:
             "等待KIMI进入新对话超时"
         )
 
-    def _open_main_menu(self) -> None:
+    def _current_model(
+            self,
+    ) -> str:
+        trigger = self.page.locator(
+            MODEL_SWITCH_SELECTOR
+        ).first
+
+        trigger.wait_for(
+            state="visible",
+            timeout=5000,
+        )
+
+        name_node = trigger.locator(
+            MODEL_NAME_SELECTOR
+        ).first
+
+        if name_node.count() == 0:
+            return ""
+
+        return (
+            name_node
+            .inner_text()
+            .strip()
+        )
+
+    def _current_mode(
+            self,
+    ) -> str:
+        trigger = self.page.locator(
+            MODEL_SWITCH_SELECTOR
+        ).first
+
+        trigger.wait_for(
+            state="visible",
+            timeout=5000,
+        )
+
+        effort_node = trigger.locator(
+            CURRENT_EFFORT_SELECTOR
+        ).first
+
+        if effort_node.count() == 0:
+            return ""
+
+        return (
+            effort_node
+            .inner_text()
+            .strip()
+        )
+
+    def _open_main_menu(
+            self,
+    ) -> None:
         trigger = self.page.locator(
             MODEL_SWITCH_SELECTOR
         ).first
@@ -495,132 +576,244 @@ class KimiClient:
         )
 
         if (
-                trigger.get_attribute("aria-expanded")
-                != "true"
+                trigger.get_attribute(
+                    "aria-expanded"
+                )
+                == "true"
         ):
-            trigger.click()
-            self.page.wait_for_timeout(200)
+            return
 
-    def _open_model_menu(self) -> None:
-        self._open_main_menu()
+        trigger.click()
+        self._random_action_delay()
 
-        entry = self.page.locator(
-            MODEL_MENU_SELECTOR
-        ).first
-
-        entry.wait_for(
-            state="visible",
-            timeout=5000,
+        deadline = (
+                time.monotonic()
+                + 5.0
         )
 
-        if (
-                entry.get_attribute("aria-expanded")
-                != "true"
+        while (
+                time.monotonic()
+                < deadline
         ):
-            entry.click()
-            self.page.wait_for_timeout(200)
+            trigger = self.page.locator(
+                MODEL_SWITCH_SELECTOR
+            ).first
 
-    def _find_radio(
-            self,
-            name: str,
-    ):
-        radios = self.page.locator(
-            MODE_OPTION_SELECTOR
-        )
+            if (
+                    trigger.count() > 0
+                    and trigger.get_attribute(
+                "aria-expanded"
+            )
+                    == "true"
+            ):
+                return
 
-        for index in range(radios.count()):
-            item = radios.nth(index)
-
-            if not item.is_visible():
-                continue
-
-            text = item.inner_text().strip()
-
-            if not text:
-                continue
-
-            first_line = (
-                text.splitlines()[0].strip()
+            self.page.wait_for_timeout(
+                100
             )
 
-            if first_line == name:
-                return item
-
-        return None
+        raise TimeoutError(
+            "等待KIMI模型菜单打开超时"
+        )
 
     def set_model(
             self,
             model: KimiModel,
     ) -> None:
-        self._open_model_menu()
+        current = self._current_model()
 
-        option = self._find_radio(
-            model.value
+        if current == model.value:
+            return
+
+        self._open_main_menu()
+
+        options = self.page.locator(
+            MODEL_OPTION_SELECTOR
         )
 
-        if option is None:
+        target = None
+
+        for index in range(
+                options.count()
+        ):
+            option = options.nth(
+                index
+            )
+
+            name_node = option.locator(
+                MODEL_NAME_SELECTOR
+            ).first
+
+            if name_node.count() == 0:
+                continue
+
+            name = (
+                name_node
+                .inner_text()
+                .strip()
+            )
+
+            if name == model.value:
+                target = option
+                break
+
+        if target is None:
+            self._close_profile_menu()
+
             raise RuntimeError(
-                f"没有找到KIMI模型：{model.value}"
+                "没有找到KIMI模型："
+                f"{model.value}"
             )
 
         if (
-                option.get_attribute("aria-checked")
+                target.get_attribute(
+                    "aria-checked"
+                )
                 != "true"
         ):
-            option.click()
-            self.page.wait_for_timeout(400)
+            target.click()
+            self._random_action_delay()
 
-        self._open_model_menu()
-
-        option = self._find_radio(
-            model.value
+        # K3 / K3集群切换会发生页面路由变化，
+        # 所以不能继续使用点击前的旧 locator。
+        deadline = (
+                time.monotonic()
+                + 10.0
         )
 
-        if (
-                option is None
-                or option.get_attribute("aria-checked")
-                != "true"
+        while (
+                time.monotonic()
+                < deadline
         ):
-            raise RuntimeError(
-                f"KIMI模型切换失败：{model.value}"
+            try:
+                current = (
+                    self._current_model()
+                )
+
+                if current == model.value:
+                    return
+
+            except Exception:
+                pass
+
+            self.page.wait_for_timeout(
+                150
             )
+
+        raise TimeoutError(
+            "KIMI模型切换失败："
+            f"{model.value}"
+        )
 
     def set_mode(
             self,
             mode: KimiMode,
     ) -> None:
-        self._open_main_menu()
+        current = self._current_mode()
 
-        option = self._find_radio(
-            mode.value
-        )
-
-        if option is None:
-            raise RuntimeError(
-                f"当前模型不支持模式：{mode.value}"
-            )
-
-        if (
-                option.get_attribute("aria-checked")
-                != "true"
-        ):
-            option.click()
-            self.page.wait_for_timeout(400)
+        if current == mode.value:
+            return
 
         self._open_main_menu()
 
-        option = self._find_radio(
-            mode.value
+        effort_entry = self.page.locator(
+            EFFORT_ENTRY_SELECTOR
+        ).first
+
+        effort_entry.wait_for(
+            state="visible",
+            timeout=5000,
         )
 
         if (
-                option is None
-                or option.get_attribute("aria-checked")
+                effort_entry.get_attribute(
+                    "aria-expanded"
+                )
                 != "true"
         ):
-            raise RuntimeError(
-                f"KIMI模式切换失败：{mode.value}"
+            effort_entry.click()
+            self._random_action_delay()
+
+        options = self.page.locator(
+            EFFORT_OPTION_SELECTOR
+        )
+
+        options.first.wait_for(
+            state="visible",
+            timeout=5000,
+        )
+
+        target = None
+
+        for index in range(
+                options.count()
+        ):
+            option = options.nth(
+                index
             )
+
+            name_node = option.locator(
+                EFFORT_NAME_SELECTOR
+            ).first
+
+            if name_node.count() == 0:
+                continue
+
+            name = (
+                name_node
+                .inner_text()
+                .strip()
+            )
+
+            if name == mode.value:
+                target = option
+                break
+
+        if target is None:
+            self._close_profile_menu()
+
+            raise RuntimeError(
+                "当前KIMI模型没有思考强度："
+                f"{mode.value}"
+            )
+
+        if (
+                target.get_attribute(
+                    "aria-checked"
+                )
+                != "true"
+        ):
+            target.click()
+            self._random_action_delay()
+
+        deadline = (
+                time.monotonic()
+                + 5.0
+        )
+
+        while (
+                time.monotonic()
+                < deadline
+        ):
+            try:
+                current = (
+                    self._current_mode()
+                )
+
+                if current == mode.value:
+                    return
+
+            except Exception:
+                pass
+
+            self.page.wait_for_timeout(
+                100
+            )
+
+        raise TimeoutError(
+            "KIMI思考强度切换失败："
+            f"{mode.value}"
+        )
 
     def set_profile(
             self,
@@ -628,47 +821,80 @@ class KimiClient:
             mode: KimiMode,
     ) -> None:
         supported_modes = (
-            MODEL_MODE_COMPATIBILITY[model]
+            MODEL_MODE_COMPATIBILITY[
+                model
+            ]
         )
 
         if mode not in supported_modes:
             raise ValueError(
-                "KIMI不支持该模型/模式组合："
+                "KIMI不支持该模型/思考强度组合："
                 f"{model.value} + {mode.value}"
             )
 
         try:
-            # 模型切换可能自动修改模式
-            self.set_model(model)
+            # 顺序非常重要：
+            # 必须先切模型，再切思考强度。
+            self.set_model(
+                model
+            )
 
-            # 最后显式固定最终模式
-            self.set_mode(mode)
+            self.set_mode(
+                mode
+            )
+
+            current_model = (
+                self._current_model()
+            )
+
+            current_mode = (
+                self._current_mode()
+            )
+
+            if (
+                    current_model
+                    != model.value
+            ):
+                raise RuntimeError(
+                    "KIMI模型最终校验失败："
+                    f"期望={model.value}，"
+                    f"实际={current_model}"
+                )
+
+            if (
+                    current_mode
+                    != mode.value
+            ):
+                raise RuntimeError(
+                    "KIMI思考强度最终校验失败："
+                    f"期望={mode.value}，"
+                    f"实际={current_mode}"
+                )
 
         finally:
             self._close_profile_menu()
 
-    def _close_profile_menu(self) -> None:
-        trigger = self.page.locator(
-            MODEL_SWITCH_SELECTOR
-        ).first
-
-        for _ in range(3):
-            expanded = trigger.get_attribute(
-                "aria-expanded"
+    def _close_profile_menu(
+            self,
+    ) -> None:
+        # KIMI可能同时存在：
+        # 主模型菜单 + 思考强度二级菜单。
+        # 最多按两次 Escape 即可全部关闭。
+        for _ in range(2):
+            menus = self.page.locator(
+                '.kimi-menu-positioner'
+                '[role="menu"]:visible'
             )
 
-            if expanded != "true":
+            if menus.count() == 0:
                 return
 
-            self.page.keyboard.press("Escape")
-            self.page.wait_for_timeout(150)
+            self.page.keyboard.press(
+                "Escape"
+            )
 
-        if (
-                trigger.get_attribute("aria-expanded")
-                == "true"
-        ):
-            raise RuntimeError(
-                "KIMI模型/模式菜单关闭失败"
+            self.page.wait_for_timeout(
+                100
             )
 
     def _open_sources(self) -> bool:

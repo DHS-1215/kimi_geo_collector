@@ -1,56 +1,48 @@
 from enum import StrEnum
-from dataclasses import dataclass, field
 
 
 class KimiMode(StrEnum):
-    QUICK = "快速回答"
-    THINKING = "深度思考"
-    EXPERT = "专家模式"
+    STANDARD = "标准"
+    ADVANCED = "进阶"
+    EXTREME = "极致"
 
 
 class KimiModel(StrEnum):
-    HY3 = "Hy3"
-    DEEPSEEK = "DeepSeek"
-    HY4_PREVIEW = "Hy4 preview"
+    FAST = "快速"
+    K3 = "K3"
+    K3_CLUSTER = "K3 集群"
 
 
-MODEL_MODE_COMPATIBILITY = {
-    KimiModel.HY3: {
-        KimiMode.QUICK,
-        KimiMode.THINKING,
-        KimiMode.EXPERT,
+MODEL_MODE_COMPATIBILITY: dict[
+    KimiModel,
+    set[KimiMode],
+] = {
+    KimiModel.FAST: {
+        KimiMode.STANDARD,
+        KimiMode.ADVANCED,
     },
-    KimiModel.DEEPSEEK: {
-        KimiMode.QUICK,
-        KimiMode.THINKING,
+
+    KimiModel.K3: {
+        KimiMode.STANDARD,
+        KimiMode.ADVANCED,
+        KimiMode.EXTREME,
     },
-    KimiModel.HY4_PREVIEW: {
-        KimiMode.EXPERT,
+
+    KimiModel.K3_CLUSTER: {
+        KimiMode.STANDARD,
+        KimiMode.ADVANCED,
+        KimiMode.EXTREME,
     },
 }
 
 
-@dataclass
-class KimiSource:
-    title: str = ""
-    url: str = ""
-    domain: str = ""
-
-
-@dataclass
-class KimiResult:
-    question: str
-
-    answer: str
-
-    model: str
-
-    mode: str
-
-    url: str
-
-    sources: list[KimiSource] = field(default_factory=list)
-
-    status: str = "success"
-
-    error: str = ""
+def is_model_mode_compatible(
+        model: KimiModel,
+        mode: KimiMode,
+) -> bool:
+    return (
+        mode
+        in MODEL_MODE_COMPATIBILITY[
+            model
+        ]
+    )

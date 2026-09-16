@@ -26,13 +26,13 @@ def build_browser(
     )
 
 
-def test_find_yuanbao_chat_page():
+def test_find_kimi_chat_page():
     browser = build_browser(
         [
             "chrome://downloads",
             "https://example.com/",
             (
-                "https://yuanbao.tencent.com/"
+                "https://www.kimi.com/"
                 "chat/test/123"
             ),
         ]
@@ -40,15 +40,15 @@ def test_find_yuanbao_chat_page():
 
     page = find_page_by_url(
         browser,
-        "https://yuanbao.tencent.com/",
+        "https://www.kimi.com/",
     )
 
     assert (
-            page.url
-            == (
-                "https://yuanbao.tencent.com/"
-                "chat/test/123"
-            )
+        page.url
+        == (
+            "https://www.kimi.com/"
+            "chat/test/123"
+        )
     )
 
 
@@ -61,10 +61,10 @@ def test_find_page_raises_when_missing():
     )
 
     with pytest.raises(
-            RuntimeError,
-            match="未找到目标页面",
+        RuntimeError,
+        match="未找到目标页面",
     ):
         find_page_by_url(
             browser,
-            "https://yuanbao.tencent.com/",
+            "https://www.kimi.com/",
         )
