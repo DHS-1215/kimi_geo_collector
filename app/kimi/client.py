@@ -433,9 +433,12 @@ class KimiClient:
             force=True
         )
 
+        self._random_action_delay()
+
         editor.fill(
             question
         )
+
         self._random_action_delay()
 
     def _send(self) -> None:
@@ -916,6 +919,8 @@ class KimiClient:
 
         visible_tool.click()
 
+        self._random_action_delay()
+
         drawer = self.page.locator(
             REFERENCE_DRAWER_SELECTOR
         ).first
@@ -949,7 +954,7 @@ class KimiClient:
         ):
             close_button.first.click()
 
-            self.page.wait_for_timeout(200)
+            self._random_action_delay()
 
     def get_sources(
             self,

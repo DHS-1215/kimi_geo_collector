@@ -11,9 +11,9 @@ class KimiConfig:
 
     action_delay_max: float = 2.5
 
-    task_delay_min: float = 3.0
+    task_delay_min: float = 12.0
 
-    task_delay_max: float = 6.0
+    task_delay_max: float = 18.0
 
     # 单任务普通失败自动重试次数。
     # 2 表示首次执行失败后，
