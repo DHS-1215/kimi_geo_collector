@@ -79,6 +79,128 @@ def choose_product() -> tuple[str, str, Path]:
         )
 
 
+def run_with_capacity_resume(
+        *,
+        runner: KimiBatchRunner,
+        tasks,
+        product_name: str,
+        batch_id: str,
+):
+    while True:
+        results = runner.run(
+            tasks
+        )
+
+        capacity_interrupted = any(
+            result.acquisition_status
+            == "service_capacity_limited"
+            for result in results
+        )
+
+        if not capacity_interrupted:
+            return results
+
+        success_count = sum(
+            1
+            for result in results
+            if (
+                    result.status == "success"
+                    and result.is_complete
+            )
+        )
+
+        remaining_count = (
+                len(tasks)
+                - success_count
+        )
+
+        print()
+        print("=" * 60)
+        print("KIMI 服务容量限制")
+        print("=" * 60)
+        print()
+        print(
+            f"[PRODUCT]   {product_name}"
+        )
+        print(
+            f"[BATCH]     {batch_id}"
+        )
+        print(
+            f"[TOTAL]     {len(tasks)}"
+        )
+        print(
+            f"[SUCCESS]   {success_count}"
+        )
+        print(
+            f"[REMAINING] {remaining_count}"
+        )
+        print()
+        print(
+            "[CHECKPOINT] 当前进度已保存"
+        )
+        print()
+        print(
+            "请在 KIMI 浏览器中人工完成："
+        )
+        print(
+            "1. 退出当前账号"
+        )
+        print(
+            "2. 登录新的 KIMI 账号"
+        )
+        print(
+            "3. 确认 KIMI 页面恢复可用"
+        )
+        print()
+        print(
+            "[R] 换号完成，继续当前 Batch"
+        )
+        print(
+            "[Q] 保存进度并退出"
+        )
+        print()
+
+        while True:
+            action = input(
+                "请输入选项 [R/Q]: "
+            ).strip().upper()
+
+            if action in {
+                "R",
+                "Q",
+            }:
+                break
+
+            print(
+                "请输入 R 或 Q。"
+            )
+
+        if action == "Q":
+            print()
+            print(
+                "[EXIT] 当前 Batch "
+                "保持 interrupted 状态"
+            )
+            print(
+                "[PACKAGE] 本次不生成最终 "
+                "GEO 标准包和 ZIP"
+            )
+
+            return None
+
+        print()
+        print(
+            "[RESUME] 开始继续当前 Batch"
+        )
+        print(
+            "[RESUME] 已成功任务将自动跳过"
+        )
+        print(
+            "[RESUME] 容量失败任务将重新执行"
+        )
+        print()
+
+
 def main() -> None:
     (
         product_id,
@@ -211,72 +333,14 @@ def main() -> None:
             ),
         )
 
-        results = runner.run(
-            tasks
+        results = run_with_capacity_resume(
+            runner=runner,
+            tasks=tasks,
+            product_name=product_name,
+            batch_id=batch_id,
         )
 
-        capacity_interrupted = any(
-            result.acquisition_status
-            == "service_capacity_limited"
-            for result in results
-        )
-
-        if capacity_interrupted:
-            success_count = sum(
-                1
-                for result in results
-                if (
-                        result.status == "success"
-                        and result.is_complete
-                )
-            )
-
-            remaining_count = (
-                    len(tasks)
-                    - success_count
-            )
-
-            print()
-            print("=" * 60)
-            print("Pipeline Interrupted")
-            print("=" * 60)
-            print()
-            print(
-                f"[PRODUCT]   {product_name}"
-            )
-            print(
-                f"[BATCH]     {batch_id}"
-            )
-            print(
-                "[REASON]    "
-                "KIMI 服务容量限制"
-            )
-            print(
-                f"[TOTAL]     {len(tasks)}"
-            )
-            print(
-                f"[SUCCESS]   {success_count}"
-            )
-            print(
-                f"[REMAINING] {remaining_count}"
-            )
-            print()
-            print(
-                "[CHECKPOINT] 当前进度已保存"
-            )
-            print(
-                "[ACTION]     请稍后重新运行"
-                "并选择同一产品"
-            )
-            print(
-                "[RESUME]     系统将自动续跑，"
-                "已成功任务不会重复采集"
-            )
-            print(
-                "[PACKAGE]    本次不生成最终 "
-                "GEO 标准包和 ZIP"
-            )
-
+        if results is None:
             return
 
     output_dir = (
