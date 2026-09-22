@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 
 from app.kimi.client import KimiClient
 
-CDP_URL = "http://127.0.0.1:9222"
+CDP_URL = "http://127.0.0.1:9224"
 
 
 def main() -> None:

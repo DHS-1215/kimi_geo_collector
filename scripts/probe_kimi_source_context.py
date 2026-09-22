@@ -6,7 +6,7 @@ from app.kimi.selectors import (
     ASSISTANT_ITEM_SELECTOR,
 )
 
-CDP_URL = "http://127.0.0.1:9222"
+CDP_URL = "http://127.0.0.1:9224"
 
 
 def main() -> None:

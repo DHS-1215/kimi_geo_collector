@@ -3,7 +3,7 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-CDP_URL = "http://127.0.0.1:9222"
+CDP_URL = "http://127.0.0.1:9224"
 
 MODEL_SWITCH_SELECTOR = ".current-model"
 

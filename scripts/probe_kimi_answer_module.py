@@ -6,7 +6,7 @@ from app.kimi.answer import (
     wait_for_answer,
 )
 
-CDP_URL = "http://127.0.0.1:9222"
+CDP_URL = "http://127.0.0.1:9224"
 
 INPUT_SELECTOR = (
     '.chat-input-editor'

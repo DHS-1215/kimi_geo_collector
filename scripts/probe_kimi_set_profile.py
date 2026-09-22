@@ -11,7 +11,7 @@ from app.kimi.types import (
     KimiModel,
 )
 
-CDP_URL = "http://127.0.0.1:9222"
+CDP_URL = "http://127.0.0.1:9224"
 
 CASES = (
     (

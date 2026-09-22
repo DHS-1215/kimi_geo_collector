@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class KimiConfig:
-    cdp_url: str = "http://127.0.0.1:9222"
+    cdp_url: str = "http://127.0.0.1:9224"
 
     answer_timeout: int = 120
 
