@@ -11,3 +11,4 @@ output/
 
 # KIMI 开发阶段探针输出
 kimi_w*.txt
+/kimi_geo_collector_server.zip
