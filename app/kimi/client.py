@@ -901,23 +901,40 @@ class KimiClient:
             )
 
     def _open_sources(self) -> bool:
-        tools = self.page.locator(
-            SOURCE_TOOL_SELECTOR
+        """
+        打开最新一条 KIMI 回答的引用来源面板。
+
+        返回：
+        - True：引用来源面板成功打开，并且至少有一条来源可见
+        - False：没有引用入口，或面板打开失败
+        """
+
+        assistants = self.page.locator(
+            ASSISTANT_ITEM_SELECTOR
         )
 
-        visible_tool = None
-
-        for index in range(tools.count()):
-            item = tools.nth(index)
-
-            if item.is_visible():
-                visible_tool = item
-                break
-
-        if visible_tool is None:
+        if assistants.count() == 0:
             return False
 
-        visible_tool.click()
+        latest = assistants.last
+
+        trigger = latest.locator(
+            SOURCE_TOOL_SELECTOR
+        ).first
+
+        if trigger.count() == 0:
+            return False
+
+        try:
+            if not trigger.is_visible():
+                return False
+        except Exception:
+            return False
+
+        try:
+            trigger.click()
+        except Exception:
+            return False
 
         self._random_action_delay()
 
@@ -925,36 +942,73 @@ class KimiClient:
             REFERENCE_DRAWER_SELECTOR
         ).first
 
-        drawer.wait_for(
-            state="visible",
-            timeout=5000,
-        )
+        try:
+            drawer.wait_for(
+                state="visible",
+                timeout=5000,
+            )
+        except Exception:
+            return False
 
-        # Drawer 出现不代表引用卡片已经渲染完成。
-        # 继续等待至少一条正式引用来源。
         first_item = self.page.locator(
             REFERENCE_ITEM_SELECTOR
         ).first
 
-        first_item.wait_for(
-            state="visible",
-            timeout=5000,
-        )
+        try:
+            first_item.wait_for(
+                state="visible",
+                timeout=5000,
+            )
+        except Exception:
+            return False
 
         return True
 
     def _close_sources(self) -> None:
+        """
+        关闭右侧引用来源面板。
+        """
+
+        drawer = self.page.locator(
+            REFERENCE_DRAWER_SELECTOR
+        ).first
+
+        try:
+            if (
+                    drawer.count() == 0
+                    or not drawer.is_visible()
+            ):
+                return
+        except Exception:
+            return
+
         close_button = self.page.locator(
             REFERENCE_CLOSE_SELECTOR
-        )
+        ).first
 
-        if (
-                close_button.count() > 0
-                and close_button.first.is_visible()
-        ):
-            close_button.first.click()
+        try:
+            if (
+                    close_button.count() == 0
+                    or not close_button.is_visible()
+            ):
+                return
+        except Exception:
+            return
 
-            self._random_action_delay()
+        try:
+            close_button.click()
+        except Exception:
+            return
+
+        self._random_action_delay()
+
+        try:
+            drawer.wait_for(
+                state="hidden",
+                timeout=5000,
+            )
+        except Exception:
+            pass
 
     def get_sources(
             self,
@@ -964,6 +1018,159 @@ class KimiClient:
         )
 
         return extractor.extract()
+
+    def capture_task_screenshot(
+            self,
+            task_id: str,
+            batch_id: str,
+            source_count: int = 0,
+    ) -> dict:
+        """
+        为成功任务保存一张最终页面截图。
+
+        截图规则与 GEO 其他采集器保持一致：
+        - 每个 task 一张 PNG
+        - 文件名使用 task_id
+        - 尽量打开来源面板后截图
+        - 截当前浏览器 viewport，不截 full page
+        """
+
+        import hashlib
+        import struct
+        from pathlib import Path
+
+        screenshot_dir = (
+                Path("output")
+                / "screenshots"
+                / batch_id
+        )
+
+        screenshot_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        screenshot_file = (
+                screenshot_dir
+                / f"{task_id}.png"
+        )
+
+        package_path = (
+            f"screenshots/{task_id}.png"
+        )
+
+        sources_opened = False
+
+        try:
+            # 有来源时，截图前必须成功打开来源抽屉。
+            if source_count > 0:
+                try:
+                    self._close_sources()
+                except Exception:
+                    pass
+
+                for attempt in range(3):
+                    try:
+                        sources_opened = (
+                            self._open_sources()
+                        )
+                    except Exception:
+                        sources_opened = False
+
+                    if sources_opened:
+                        break
+
+                    self.page.wait_for_timeout(
+                        500
+                    )
+
+                if not sources_opened:
+                    raise RuntimeError(
+                        "回答存在来源，但截图前无法打开来源抽屉"
+                    )
+
+                # _open_sources 已经等待抽屉和首条来源可见，
+                # 再额外等待页面布局和来源内容完全稳定。
+                self.page.wait_for_timeout(
+                    1000
+                )
+
+            else:
+                # 没有来源的回答正常截主页面。
+                self.page.wait_for_timeout(
+                    500
+                )
+
+            self.page.screenshot(
+                path=str(screenshot_file),
+                type="png",
+                full_page=False,
+            )
+
+            screenshot_bytes = (
+                screenshot_file.read_bytes()
+            )
+
+            screenshot_sha256 = (
+                hashlib.sha256(
+                    screenshot_bytes
+                ).hexdigest()
+            )
+
+            screenshot_size_bytes = (
+                len(screenshot_bytes)
+            )
+
+            screenshot_width = 0
+            screenshot_height = 0
+
+            # PNG IHDR 中宽高位于
+            # byte 16..24。
+            if (
+                    len(screenshot_bytes) >= 24
+                    and
+                    screenshot_bytes[:8]
+                    == b"\x89PNG\r\n\x1a\n"
+            ):
+                (
+                    screenshot_width,
+                    screenshot_height,
+                ) = struct.unpack(
+                    ">II",
+                    screenshot_bytes[16:24],
+                )
+
+            return {
+                "local_path": str(
+                    screenshot_file.resolve()
+                ),
+                "path": package_path,
+                "sha256": screenshot_sha256,
+                "size_bytes": (
+                    screenshot_size_bytes
+                ),
+                "width": screenshot_width,
+                "height": screenshot_height,
+                "error": "",
+            }
+
+        except Exception as e:
+            return {
+                "local_path": "",
+                "path": "",
+                "sha256": "",
+                "size_bytes": 0,
+                "width": 0,
+                "height": 0,
+                "error": str(e),
+            }
+
+        finally:
+            if sources_opened:
+                try:
+                    self._close_sources()
+                except Exception:
+                    pass
 
     def _random_action_delay(
             self,

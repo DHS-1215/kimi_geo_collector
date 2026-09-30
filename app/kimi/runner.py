@@ -164,6 +164,78 @@ class KimiBatchRunner:
 
         result.platform = "kimi"
 
+        if (
+                result.status == "success"
+                and result.is_complete
+        ):
+            capture_screenshot = getattr(
+                self.client,
+                "capture_task_screenshot",
+                None,
+            )
+
+            if capture_screenshot is not None:
+                try:
+                    screenshot = (
+                        capture_screenshot(
+                            task_id=task.task_id,
+                            batch_id=self.batch_id,
+                            source_count=result.source_count_raw,
+                        )
+                    )
+
+                    result.screenshot_local_path = (
+                        screenshot.get(
+                            "local_path",
+                            "",
+                        )
+                    )
+
+                    result.screenshot_path = (
+                        screenshot.get(
+                            "path",
+                            "",
+                        )
+                    )
+
+                    result.screenshot_sha256 = (
+                        screenshot.get(
+                            "sha256",
+                            "",
+                        )
+                    )
+
+                    result.screenshot_size_bytes = (
+                        screenshot.get(
+                            "size_bytes",
+                            0,
+                        )
+                    )
+
+                    result.screenshot_width = (
+                        screenshot.get(
+                            "width",
+                            0,
+                        )
+                    )
+
+                    result.screenshot_height = (
+                        screenshot.get(
+                            "height",
+                            0,
+                        )
+                    )
+
+                    result.screenshot_error = (
+                        screenshot.get(
+                            "error",
+                            "",
+                        )
+                    )
+
+                except Exception as e:
+                    result.screenshot_error = str(e)
+
         return result
 
     def run_task_with_retry(

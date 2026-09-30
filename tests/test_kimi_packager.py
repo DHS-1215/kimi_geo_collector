@@ -7,7 +7,7 @@ from app.kimi.packager import (
 )
 
 
-def test_create_package_contains_only_standard_files(
+def test_create_package_without_screenshots(
         tmp_path: Path,
 ):
     source_dir = (
@@ -59,6 +59,81 @@ def test_create_package_contains_only_standard_files(
         PACKAGE_FILES
     )
 
+
+def test_create_package_includes_screenshots(
+        tmp_path: Path,
+):
+    source_dir = (
+            tmp_path
+            / "package"
+    )
+
+    source_dir.mkdir()
+
+    for filename in PACKAGE_FILES:
+        (
+                source_dir
+                / filename
+        ).write_text(
+            "test",
+            encoding="utf-8",
+        )
+
+    screenshots_dir = (
+            source_dir
+            / "screenshots"
+    )
+
+    screenshots_dir.mkdir()
+
+    (
+            screenshots_dir
+            / "kimi_t_001.png"
+    ).write_bytes(
+        b"screenshot-001"
+    )
+
+    (
+            screenshots_dir
+            / "kimi_t_002.png"
+    ).write_bytes(
+        b"screenshot-002"
+    )
+
+    # 普通额外文件仍然不能进入 ZIP。
+    (
+            source_dir
+            / "debug.txt"
+    ).write_text(
+        "should not be packaged",
+        encoding="utf-8",
+    )
+
+    zip_path = (
+            tmp_path
+            / "package.zip"
+    )
+
+    create_package(
+        source_dir=source_dir,
+        zip_path=zip_path,
+    )
+
+    with ZipFile(
+            zip_path,
+            "r",
+    ) as zip_file:
+        names = zip_file.namelist()
+
+    expected_names = [
+        *PACKAGE_FILES,
+        "screenshots/kimi_t_001.png",
+        "screenshots/kimi_t_002.png",
+    ]
+
+    assert names == expected_names
+
+    assert "debug.txt" not in names
 
 def test_create_package_missing_file_fails(
         tmp_path: Path,

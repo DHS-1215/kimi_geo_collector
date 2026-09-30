@@ -14,7 +14,6 @@ NEW_CHAT_SELECTOR = (
     '[href*="chat_enter_method=new_chat"]'
 )
 
-
 MODE_OPTION_SELECTOR = (
     'button[role="menuitemradio"]'
 )
@@ -25,15 +24,20 @@ MODEL_MENU_SELECTOR = (
 )
 
 SOURCE_TOOL_SELECTOR = (
-    '[class*="ToolbarSearchGuid_searchGuidTool"]'
+    ".ref-action"
 )
 
 REFERENCE_DRAWER_SELECTOR = (
-    ".agent-dialogue-references"
+    ".side-console-container .ref"
 )
 
 REFERENCE_ITEM_SELECTOR = (
-    ".agent-dialogue-references__item"
+    ".side-console-container .ref .site-item"
+)
+
+REFERENCE_CLOSE_SELECTOR = (
+    '.side-console-container .ref '
+    'svg.close[name="Close"]'
 )
 
 REFERENCE_CARD_SELECTOR = (
@@ -50,10 +54,6 @@ REFERENCE_TITLE_SELECTOR = (
 
 REFERENCE_DESC_SELECTOR = (
     ".hyc-common-markdown__ref_card-desc"
-)
-
-REFERENCE_CLOSE_SELECTOR = (
-    ".agent-dialogue-references__close"
 )
 
 QUESTION_ITEM_SELECTOR = (
@@ -80,7 +80,6 @@ ASSISTANT_ACTIONS_SELECTOR = (
 CITATION_SELECTOR = (
     "a.pua-ref-cite-tag[href]"
 )
-
 
 MODEL_OPTION_SELECTOR = (
     'button.model-item'

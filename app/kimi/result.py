@@ -51,6 +51,20 @@ class KimiCollectionResult:
 
     collected_at: str = ""
 
+    screenshot_local_path: str = ""
+
+    screenshot_path: str = ""
+
+    screenshot_sha256: str = ""
+
+    screenshot_size_bytes: int = 0
+
+    screenshot_width: int = 0
+
+    screenshot_height: int = 0
+
+    screenshot_error: str = ""
+
 
 def utc_now_iso() -> str:
     return datetime.now(

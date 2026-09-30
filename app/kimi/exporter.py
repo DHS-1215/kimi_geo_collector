@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from app.kimi.checksum import generate_checksums
@@ -48,6 +49,13 @@ class KimiExporter:
             if legacy_path.exists():
                 legacy_path.unlink()
 
+        # 将采集阶段保存的截图复制到
+        # GEO 标准包 screenshots/ 目录。
+        screenshot_files = self._copy_screenshots(
+            results,
+            output,
+        )
+
         # GEO v1 标准数据文件
         self._save_tasks_jsonl(
             results,
@@ -77,16 +85,109 @@ class KimiExporter:
             output / "tasks.jsonl",
             output / "answers.jsonl",
             output / "sources.jsonl",
+            *screenshot_files,
         ]
 
         checksums = generate_checksums(
-            checksum_files
+            checksum_files,
+            base_dir=output,
         )
 
         self._write_json(
             output / "checksums.json",
             checksums,
         )
+
+    def _copy_screenshots(
+            self,
+            results: list[KimiCollectionResult],
+            output: Path,
+    ) -> list[Path]:
+        """
+        将采集阶段截图复制到 GEO 标准包。
+
+        标准包结构：
+        screenshots/<task_id>.png
+        """
+
+        screenshots_dir = (
+                output
+                / "screenshots"
+        )
+
+        copied_files: list[Path] = []
+
+        # 如果重复导出同一个 batch，
+        # 先清理旧截图，避免残留。
+        if screenshots_dir.exists():
+            shutil.rmtree(
+                screenshots_dir
+            )
+
+        for result in results:
+
+            # 先清空 package 相对路径。
+            # 只有真正复制成功后才重新赋值。
+            result.screenshot_path = ""
+
+            local_path_raw = (
+                    result.screenshot_local_path
+                    or ""
+            ).strip()
+
+            # 本任务没有截图时直接跳过。
+            if not local_path_raw:
+                continue
+
+            source = Path(
+                local_path_raw
+            )
+
+            if not source.is_file():
+                if not result.screenshot_error:
+                    result.screenshot_error = (
+                        "截图文件不存在："
+                        f"{source}"
+                    )
+
+                continue
+
+            screenshots_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            target = (
+                    screenshots_dir
+                    / f"{result.task_id}.png"
+            )
+
+            try:
+                shutil.copy2(
+                    source,
+                    target,
+                )
+            except Exception as e:
+                if not result.screenshot_error:
+                    result.screenshot_error = (
+                        "复制截图失败："
+                        f"{e}"
+                    )
+
+                continue
+
+            # 这里写的是 ZIP / GEO 标准包内部路径，
+            # 不是 Windows 本机路径。
+            result.screenshot_path = (
+                f"screenshots/"
+                f"{result.task_id}.png"
+            )
+
+            copied_files.append(
+                target
+            )
+
+        return copied_files
 
     def _save_tasks_jsonl(
             self,
@@ -144,6 +245,28 @@ class KimiExporter:
                     "source_error"
                 ] = result.source_error
 
+            if result.screenshot_path:
+                platform_meta[
+                    "screenshot_sha256"
+                ] = result.screenshot_sha256
+
+                platform_meta[
+                    "screenshot_size_bytes"
+                ] = result.screenshot_size_bytes
+
+                platform_meta[
+                    "screenshot_width"
+                ] = result.screenshot_width
+
+                platform_meta[
+                    "screenshot_height"
+                ] = result.screenshot_height
+
+            if result.screenshot_error:
+                platform_meta[
+                    "screenshot_error"
+                ] = result.screenshot_error
+
             rows.append(
                 {
                     "answer_id": answer_id,
@@ -172,7 +295,10 @@ class KimiExporter:
                     "source_count_raw": (
                         result.source_count_raw
                     ),
-                    "screenshot_path": None,
+                    "screenshot_path": (
+                            result.screenshot_path
+                            or None
+                    ),
                     "platform_meta_json": (
                         platform_meta
                     ),
@@ -455,7 +581,7 @@ class KimiExporter:
             "capabilities": {
                 "supports_sources": True,
                 "supports_multiple_modes": True,
-                "supports_screenshot": False,
+                "supports_screenshot": True,
             },
 
             "status": (

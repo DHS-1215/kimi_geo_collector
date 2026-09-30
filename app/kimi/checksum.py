@@ -18,14 +18,33 @@ def calculate_sha256(
 
 def generate_checksums(
         files: list[str | Path],
+        base_dir: str | Path | None = None,
 ) -> dict[str, dict[str, str]]:
     file_checksums: dict[str, str] = {}
+
+    base = (
+        Path(base_dir).resolve()
+        if base_dir is not None
+        else None
+    )
 
     for file in files:
         path = Path(file)
 
+        if base is not None:
+            try:
+                checksum_key = (
+                    path.resolve()
+                    .relative_to(base)
+                    .as_posix()
+                )
+            except ValueError:
+                checksum_key = path.name
+        else:
+            checksum_key = path.name
+
         file_checksums[
-            path.name
+            checksum_key
         ] = calculate_sha256(
             path
         )
