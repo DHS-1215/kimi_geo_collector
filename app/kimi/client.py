@@ -1017,7 +1017,55 @@ class KimiClient:
             page=self.page,
         )
 
-        return extractor.extract()
+        # 保留原有的正文引用提取逻辑。
+        sources = extractor.extract()
+
+        if not sources:
+            return sources
+
+        try:
+            # 清理可能残留的来源面板。
+            self._close_sources()
+
+            if not self._open_sources():
+                print(
+                    "[SOURCE TITLE] "
+                    "来源面板不可用，保留原始引用"
+                )
+                return sources
+
+            # 根据 URL 匹配文章标题。
+            enriched = (
+                extractor.enrich_titles_from_open_panel(
+                    sources
+                )
+            )
+
+            title_count = sum(
+                1 for source in enriched
+                if source.title.strip()
+            )
+
+            print(
+                "[SOURCE TITLE] "
+                f"{title_count}/{len(enriched)}"
+            )
+
+            return enriched
+
+        except Exception as e:
+            # 标题补齐失败，不影响原始信源。
+            print(
+                "[SOURCE TITLE] "
+                f"补齐失败，保留原始引用：{e}"
+            )
+            return sources
+
+        finally:
+            try:
+                self._close_sources()
+            except Exception:
+                pass
 
     def capture_task_screenshot(
             self,

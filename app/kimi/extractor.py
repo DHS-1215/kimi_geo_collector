@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from urllib.parse import (
     urldefrag,
     urlparse,
@@ -10,6 +12,7 @@ from playwright.sync_api import Page
 from app.kimi.selectors import (
     ASSISTANT_ITEM_SELECTOR,
     CITATION_SELECTOR,
+    REFERENCE_ITEM_SELECTOR,
 )
 
 from app.kimi.source import KimiSource
@@ -172,3 +175,75 @@ class KimiSourceExtractor:
             )
 
         return sources
+
+    def enrich_titles_from_open_panel(
+            self,
+            sources: list[KimiSource],
+    ) -> list[KimiSource]:
+        """
+        从已打开的引用面板补齐文章标题。
+        根据 URL 关联，不按来源顺序关联。
+        """
+
+        if not sources:
+            return sources
+
+        items = self.page.locator(
+            REFERENCE_ITEM_SELECTOR
+        )
+
+        title_by_url: dict[str, str] = {}
+
+        for index in range(items.count()):
+            item = items.nth(index)
+
+            try:
+                raw_url = (
+                    item.get_attribute("href")
+                    or ""
+                ).strip()
+
+                if not raw_url:
+                    continue
+
+                clean_url, _ = urldefrag(raw_url)
+                clean_url = clean_url.strip()
+
+                title_node = item.locator(
+                    ".site-title"
+                ).first
+
+                if title_node.count() == 0:
+                    continue
+
+                title = (
+                    title_node.inner_text()
+                    or ""
+                ).strip()
+
+                if title:
+                    title_by_url[clean_url] = title
+
+            except Exception:
+                continue
+
+        enriched = []
+
+        for source in sources:
+            clean_url, _ = urldefrag(
+                source.url
+            )
+
+            title = title_by_url.get(
+                clean_url.strip(),
+                source.title,
+            )
+
+            enriched.append(
+                replace(
+                    source,
+                    title=title,
+                )
+            )
+
+        return enriched
